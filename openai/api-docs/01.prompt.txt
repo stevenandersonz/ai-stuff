@@ -1,0 +1,40 @@
+taking in a set of routes for a Todo application and generating a JSON structure with information about those routes. 
+
+The output includes information about each route, such as:
+
+- the route path (e.g. "/todos")
+- the HTTP method used for the route (e.g. "GET")
+- a brief description of the route (e.g. "Get all todos")
+- the expected request object  
+- the response object 
+
+INPUT: 
+app.get("/todos", (req, res) => {
+  res.send(Todos);
+});
+app.post("/todos", (req, res) => {
+  const todo = {
+    title: req.body.title,
+    description: req.body.description,
+    completed: false,
+  };
+  Todos.push(todo);
+  res.send(todo);
+});
+app.get("/todos/:id", (req, res) => {
+  let todo = Todos.find((todo) => todo.id === parseInt(req.params.id));
+  res.send(todo);
+});
+app.put("/todos/:id", (req, res) => {
+  let todo = Todos.find((todo) => todo.id === parseInt(req.params.id));
+  todo.title = req.body.title;
+  todo.description = req.body.description;
+  todo.completed = req.body.completed;
+  for (let i = 0; i < Todos.length; i++) {
+    if (Todos[i].id === todo.id) {
+      Todos[i] = todo;
+    }
+  }
+  res.send(todo);
+}); 
+OUTPUT: <COMPLETE>

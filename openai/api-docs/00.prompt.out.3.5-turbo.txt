@@ -1,0 +1,25 @@
+Routes:
+- GET /todos 
+- POST /todos 
+- GET /todos/:id 
+- PUT /todos/:id 
+
+Route Details:
+- GET /todos: Returns all todos.
+  - Request: None.
+  - Response: Array of objects where each object represents a todo.
+- POST /todos: Adds a new todo.
+  - Request: JSON object with the following properties: 
+    - title (string): The title of the todo.
+    - description (string): The description of the todo.
+    - completed (boolean): The status of completion of the todo.
+  - Response: JSON object with the same fields as the request showing the added todo.
+- GET /todos/:id: Returns a specific todo based on the given id.
+  - Request: Parameter id (number): The id of the todo to be returned.
+  - Response: JSON object representing the todo associated with the given id.
+- PUT /todos/:id: Updates the todo with the specified id. 
+  - Request: Parameter id (number): The id of the todo to be updated. JSON object with the fields to be updated
+    - title (string): The new title of the todo.
+    - description (string): The new description for the todo.
+    - completed (boolean): The new status of completion for the todo.
+  - Response: JSON object with the same fields as the request representing the updated todo.

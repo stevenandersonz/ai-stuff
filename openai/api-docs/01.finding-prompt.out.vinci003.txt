@@ -1,0 +1,3 @@
+
+
+The task of the program is to generate a list of routes and their associated methods, descriptions, requests, and responses from a given JavaScript file.

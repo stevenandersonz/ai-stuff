@@ -1,0 +1,72 @@
+There is a program that takes in a JS file and once it runs it perform a task.\ngiven the following input-output pairs:
+INPUT:
+app.get("/todos", (req, res) => {
+  res.send(Todos);
+});
+app.post("/todos", (req, res) => {
+  const todo = {
+    title: req.body.title,
+    description: req.body.description,
+    completed: false,
+  };
+  Todos.push(todo);
+  res.send(todo);
+});
+app.get("/todos/:id", (req, res) => {
+  let todo = Todos.find((todo) => todo.id === parseInt(req.params.id));
+  res.send(todo);
+});
+app.put("/todos/:id", (req, res) => {
+  let todo = Todos.find((todo) => todo.id === parseInt(req.params.id));
+  todo.title = req.body.title;
+  todo.description = req.body.description;
+  todo.completed = req.body.completed;
+  for (let i = 0; i < Todos.length; i++) {
+    if (Todos[i].id === todo.id) {
+      Todos[i] = todo;
+    }
+  }
+  res.send(todo);
+}); 
+OUTPUT:
+[
+  {
+    "route": "/todos",
+    "method": "GET",
+    "description": "Get all todos",
+    "request": null,
+    "response": "<array of todos>"
+  },
+  {
+    "route": "/todos",
+    "method": "POST",
+    "description": "Create a new todo",
+    "request": {
+      "title": "<string>",
+      "description": "<string>",
+      "completed": "<boolean>"
+    },
+    "response": "<todo>"
+  },
+  {
+    "route": "/todos/:id",
+    "method": "GET",
+    "description": "Get a single todo by id",
+    "request": null,
+    "response": "<todo>"
+  },
+  {
+    "route": "/todos/:id",
+    "method": "PUT",
+    "description": "Update a single todo by id",
+    "request": {
+      "title": "<string>",
+      "description": "<string>",
+      "completed": "<boolean>"
+    },
+    "response": "<todo>"
+  }
+]
+
+
+what is the task of program:<COMPLETE>

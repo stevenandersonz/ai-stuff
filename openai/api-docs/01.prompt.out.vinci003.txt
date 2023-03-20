@@ -1,0 +1,55 @@
+
+[
+  {
+    path: "/todos",
+    method: "GET",
+    description: "Get all todos",
+    request: {},
+    response: {
+      title: String,
+      description: String,
+      completed: Boolean
+    }
+  },
+  {
+    path: "/todos",
+    method: "POST",
+    description: "Create a new todo",
+    request: {
+      title: String,
+      description: String,
+      completed: Boolean
+    },
+    response: {
+      title: String,
+      description: String,
+      completed: Boolean
+    }
+  },
+  {
+    path: "/todos/:id",
+    method: "GET",
+    description: "Get a single todo",
+    request: {},
+    response: {
+      title: String,
+      description: String,
+      completed: Boolean
+    }
+  },
+  {
+    path: "/todos/:id",
+    method: "PUT",
+    description: "Update a todo",
+    request: {
+      title: String,
+      description: String,
+      completed: Boolean
+    },
+    response: {
+      title: String,
+      description: String,
+      completed: Boolean
+    }
+  }
+]

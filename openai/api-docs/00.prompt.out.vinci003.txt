@@ -1,0 +1,24 @@
+
+Route 1: 
+Method: GET 
+Description: Retrieve all todos 
+Request: /todos 
+Response: Todos
+
+Route 2: 
+Method: POST 
+Description: Create a new todo 
+Request: /todos 
+Response: Todo
+
+Route 3: 
+Method: GET 
+Description: Retrieve a single todo 
+Request: /todos/:id 
+Response: Todo
+
+Route 4: 
+Method: PUT 
+Description: Update a single todo 
+Request: /todos/:id 
+Response: Todo

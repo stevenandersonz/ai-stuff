@@ -1,0 +1,2 @@
+
+Write a description of each of the input-output pairs in the form of an object.

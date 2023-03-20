@@ -1,0 +1,52 @@
+[
+  {
+    "path": "/todos",
+    "method": "GET",
+    "description": "Get all todos",
+    "request": {},
+    "response": {
+      "todos": []
+    }
+  },
+  {
+    "path": "/todos",
+    "method": "POST",
+    "description": "Create a new todo",
+    "request": {
+      "title": "string",
+      "description": "string",
+      "completed": "boolean"
+    },
+    "response": {
+      "title": "string",
+      "description": "string",
+      "completed": "boolean"
+    }
+  },
+  {
+    "path": "/todos/:id",
+    "method": "GET",
+    "description": "Get a specific todo",
+    "request": {},
+    "response": {
+      "title": "string",
+      "description": "string",
+      "completed": "boolean"
+    }
+  },
+  {
+    "path": "/todos/:id",
+    "method": "PUT",
+    "description": "Update a specific todo",
+    "request": {
+      "title": "string",
+      "description": "string",
+      "completed": "boolean"
+    },
+    "response": {
+      "title": "string",
+      "description": "string",
+      "completed": "boolean"
+    }
+  }
+]

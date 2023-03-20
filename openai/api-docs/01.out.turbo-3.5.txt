@@ -1,0 +1,56 @@
+{
+  "routes": [
+    {
+      "path": "/todos",
+      "method": "GET",
+      "description": "Get all todos",
+      "request": {},
+      "response": {
+        "todos": []
+      }
+    },
+    {
+      "path": "/todos",
+      "method": "POST",
+      "description": "Create a new todo",
+      "request": {
+        "title": "",
+        "description": "",
+        "completed": false
+      },
+      "response": {
+        "title": "",
+        "description": "",
+        "completed": false
+      }
+    },
+    {
+      "path": "/todos/:id",
+      "method": "GET",
+      "description": "Get a specific todo by ID",
+      "request": {},
+      "response": {
+        "title": "",
+        "description": "",
+        "completed": false
+      }
+    },
+    {
+      "path": "/todos/:id",
+      "method": "PUT",
+      "description": "Update a specific todo by ID",
+      "request": {
+        "title": "",
+        "description": "",
+        "completed": false
+      },
+      "response": {
+        "title": "",
+        "description": "",
+        "completed": false
+      }
+    }
+  ]
+}
+
+The above output includes a list of all the routes with their corresponding information. For each route, the path, HTTP method, description of the route, expected request object and the expected response object are included. The expected request and response objects are shown as JSON structures with their respective key-value pairs.

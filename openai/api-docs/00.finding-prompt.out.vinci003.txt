@@ -1,0 +1,3 @@
+
+
+Create an array of objects that describes the routes and methods of the above code. Each object should have the following properties: route, method, description, request, and response.
