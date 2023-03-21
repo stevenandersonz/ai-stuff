@@ -18,10 +18,12 @@ class CasualSelfAttention (nn.Module):
         super().__init__()
         self.n_embd = config.n_embd
         self.n_head = config.n_head
+        self.dropout = config.dropout
         self.qkv = nn.Linear(self.n_embd, self.n_embd * 3, bias=False)
-        self.dropout = nn.Dropout(config.dropout)
+        self.att_dropout = nn.Dropout(self.dropout)
         self.proj = nn.Linear(config.n_embd, config.n_embd, bias=False)
         self.register_buffer('bias', torch.tril(torch.ones(config.block_size, config.block_size)).view(1, 1, config.block_size, config.block_size))
+        self.flash = hasattr(nn.functional, 'scaled_dot_product_attention')
     def forward(self, x):
         B,T,C = x.shape
         qkv = self.qkv(x) # B, T, Head_size*3
@@ -31,18 +33,22 @@ class CasualSelfAttention (nn.Module):
         v = v.view(B,T,self.n_head, C//self.n_head).transpose(1,2) # (B,T,C) -> (B, T, n_h, h_size) -> (B, h_size, T, n_h)
 
         # q @ k computes the similarity between pairs of query and key vector
-
-        # NOTE the dot product between two vectors measures the degree to which they point in the same direction. 
-        # is positive and large, vectors are similar and pointing in the same direction. 
-        # is zero, vectors are orthogonal and have no similarity. 
-        # is negative, vectors point in opposite directions.
-        wei = (q@k.transpose(-2,-1)) * (1/math.sqrt(k.shape[-1])) 
-        # masked tokens affinity disabling communication between past and future tokens 
-        wei = wei.masked_fill(self.bias[:,:, :T, :T] == 0, float('-inf')) 
-        wei = F.softmax(wei, dim=-1)
-        y = wei @ v
+        assert self.flash == True, "Flash Attention CUDA kernels not available"
+        if self.flash:
+            # efficient attention using Flash Attention CUDA kernels
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True)
+        else:
+            # NOTE the dot product between two vectors measures the degree to which they point in the same direction. 
+            # is positive and large, vectors are similar and pointing in the same direction. 
+            # is zero, vectors are orthogonal and have no similarity. 
+            # is negative, vectors point in opposite directions.
+            wei = (q@k.transpose(-2,-1)) * (1/math.sqrt(k.shape[-1])) 
+            # masked tokens affinity disabling communication between past and future tokens 
+            wei = wei.masked_fill(self.bias[:,:, :T, :T] == 0, float('-inf')) 
+            wei = F.softmax(wei, dim=-1)
+            y = wei @ v
         y = y.transpose(1,2).contiguous().view(B,T,C)
-        return self.dropout(self.proj(y))
+        return self.att_dropout(self.proj(y))
 
 class FeedForwardNet (nn.Module):
     def __init__(self, config):
