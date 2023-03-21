@@ -13,19 +13,23 @@ class TransformerConfig:
     n_embd: int = 32
     dropout: float = 0.2
 
-class Head (nn.Module):
-    def __init__(self,config,head_size):
+class CasualSelfAttention (nn.Module):
+    def __init__(self,config):
         super().__init__()
-        self.value = nn.Linear(config.n_embd, head_size, bias=False)
-        self.query = nn.Linear(config.n_embd, head_size, bias=False)
-        self.key = nn.Linear(config.n_embd, head_size, bias=False)
-        self.register_buffer('bias', torch.tril(torch.ones(config.block_size, config.block_size)))
+        self.n_embd = config.n_embd
+        self.n_head = config.n_head
+        self.qkv = nn.Linear(self.n_embd, self.n_embd * 3, bias=False)
+        self.dropout = nn.Dropout(config.dropout)
+        self.proj = nn.Linear(config.n_embd, config.n_embd, bias=False)
+        self.register_buffer('bias', torch.tril(torch.ones(config.block_size, config.block_size)).view(1, 1, config.block_size, config.block_size))
     def forward(self, x):
         B,T,C = x.shape
-        k = self.key(x) # B, T, T
-        q = self.query(x)
-        # k,q,v are of shape (batch_size, context_size, head_size)
-        # q @ k won't work, k must me transpose so that it becomes (batch_size, head_size, context_size) 
+        qkv = self.qkv(x) # B, T, Head_size*3
+        q,k,v = qkv.split(self.n_embd, dim=2) # (B, T, C) x 3 
+        q = q.view(B,T,self.n_head, C//self.n_head).transpose(1,2) # (B,T,C) -> (B, T, n_h, h_size) -> (B, h_size, T, n_h)
+        k = k.view(B,T,self.n_head, C//self.n_head).transpose(1,2) # (B,T,C) -> (B, T, n_h, h_size) -> (B, h_size, T, n_h)
+        v = v.view(B,T,self.n_head, C//self.n_head).transpose(1,2) # (B,T,C) -> (B, T, n_h, h_size) -> (B, h_size, T, n_h)
+
         # q @ k computes the similarity between pairs of query and key vector
 
         # NOTE the dot product between two vectors measures the degree to which they point in the same direction. 
@@ -34,24 +38,11 @@ class Head (nn.Module):
         # is negative, vectors point in opposite directions.
         wei = (q@k.transpose(-2,-1)) * (1/math.sqrt(k.shape[-1])) 
         # masked tokens affinity disabling communication between past and future tokens 
-        wei = wei.masked_fill(self.bias[:T,:T] == 0, float('-inf')) 
+        wei = wei.masked_fill(self.bias[:,:, :T, :T] == 0, float('-inf')) 
         wei = F.softmax(wei, dim=-1)
-        v = self.value(x)
-        out = wei @ v
-        return out
-
-class MultiheadAttention (nn.Module):
-    def __init__(self, config, head_size):
-        super().__init__()
-        # n_heads must be 4x greater than head_size
-        self.sa_heads = nn.ModuleList([Head(config, head_size) for _ in range(config.n_head)])
-        self.proj = nn.Linear(config.n_embd, config.n_embd)
-        self.dropout = nn.Dropout(config.dropout)
-
-    def forward(self,x):
-        x = torch.cat([h(x) for h in self.sa_heads], dim=-1)
-        x = self.dropout(self.proj(x))
-        return x       
+        y = wei @ v
+        y = y.transpose(1,2).contiguous().view(B,T,C)
+        return self.dropout(self.proj(y))
 
 class FeedForwardNet (nn.Module):
     def __init__(self, config):
@@ -69,14 +60,13 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        head_size = config.n_embd // config.n_head
-        self.sa = MultiheadAttention(config, head_size)
+        self.att = CasualSelfAttention(config)
         self.ffwd = FeedForwardNet(config)
         self.ln1  = nn.LayerNorm(config.n_embd)
         self.ln2  = nn.LayerNorm(config.n_embd)
 
     def forward(self,x):
-        x = x + self.sa(self.ln1(x))
+        x = x + self.att(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
         return x
         
