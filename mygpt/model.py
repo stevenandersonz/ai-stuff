@@ -7,7 +7,7 @@ from dataclasses import dataclass
 @dataclass
 class TransformerConfig:
     block_size: int = 32
-    vocab_size: int = 116 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+    vocab_size: int = 128 #vocab size == 116, as per karpathy, choosing a vocab size closest to a multiple of 64 increases the speed of training 
     n_layer: int = 6
     n_head: int = 4
     n_embd: int = 32
@@ -33,7 +33,6 @@ class CasualSelfAttention (nn.Module):
         v = v.view(B,T,self.n_head, C//self.n_head).transpose(1,2) # (B,T,C) -> (B, T, n_h, h_size) -> (B, h_size, T, n_h)
 
         # q @ k computes the similarity between pairs of query and key vector
-        assert self.flash == True, "Flash Attention CUDA kernels not available"
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True)
