@@ -119,15 +119,29 @@ def print_tree(node, depth=0):
         print_tree(child, depth + 2)
 
 def monte_carlo_tree_search(game, num_iterations, debug=False):
+    """
+    Performs Monte Carlo Tree Search from the given node for a certain number of iterations.
+
+    :param node: The root node of the tree to search.
+    :param num_simulations: The number of simulations to run.
+    :return: The best move found by the search.
+    """
     root = Node(game)
     for _ in range(num_iterations):
         node = root
         while node.children:
+            # Selection: Choose a child node to explore using UCB scores
             node = node.select()
         if not node.visits:
+            # Expansion: Expand the selected node by adding a new child node
             node.expand()
+
+        # Simulation: Simulate a game from the new child node
         result = simulate_game(node.state.copy(), debug=debug)
+
+        # Backpropagation: Update the tree statistics from the simulation result
         node.update(result)
+        
     if debug:
         print_tree(root)
     bestNode = max(root.children, key=lambda node: node.visits)
