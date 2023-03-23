@@ -1,5 +1,6 @@
 import random
 import math
+
 C = 1.4
 
 def ucb_score(node, parent_visits, exploration_constant):
@@ -63,11 +64,9 @@ class TicTacToe:
         self.current_player = 'O' if self.current_player == 'X' else 'X'
 
     def is_win(self, player):
-        for row in range(3):
-            if all(self.board[row][col] == player for col in range(3)):
-                return True
-        for col in range(3):
-            if all(self.board[row][col] == player for row in range(3)):
+        if any(all(self.board[row][col] == player for col in range(3)) for row in range(3)):
+            return True
+        if any(all(self.board[row][col] == player for row in range(3)) for col in range(3)):
                 return True
         if all(self.board[i][i] == player for i in range(3)):
             return True
@@ -94,9 +93,12 @@ class TicTacToe:
             return None
 
     def print_board(self):
-        for row in self.board:
-            print(' '.join(row))
-
+        print("   0 1 2")
+        for i in range(3):
+            row_str = f"{i}  "
+            for j in range(3):
+                row_str += f"{self.board[i][j]} "
+            print(row_str) 
 def simulate_game(game, debug=False):
     while not game.is_terminal():
         game.make_move(random.choice(game.get_possible_moves()))
@@ -134,16 +136,25 @@ def monte_carlo_tree_search(game, num_iterations, debug=False):
 game = TicTacToe()
 
 
+print("--------------------")
+print("TIK TAK TOE")
+print("--------------------")
+game.print_board()
 
 while not game.is_terminal():
     if game.current_player == 'X':
-        row = int(input("Enter row: "))
-        col = int(input("Enter column: "))
-        game.make_move((row, col))
+        xy = input("Enter row and column as x,y: ").split(',')
+        if len(xy) == 2 and xy[0].isdigit() and xy[1].isdigit():
+            row, col = int(xy[0]), int(xy[1])
+            game.make_move((row, col))
+        else:
+            raise RuntimeError("Invalid input")
     else:
-        move = monte_carlo_tree_search(game, 10000, False)
+        move = monte_carlo_tree_search(game, 100, False)
         game.make_move(move)
+
     game.print_board()
+    print("\n")
 
 winner = game.get_winner()
 if winner:
