@@ -7,8 +7,8 @@ from model import Transformer, TransformerConfig
 
 # HYPERPARAMETERS
 learning_rate = 1e-3
-batch_size = 32
-max_iter = 5000
+batch_size = 64
+max_iter = 15000
 eval_iter = 100
 eval_interval = 500
 dataset = 'homer'

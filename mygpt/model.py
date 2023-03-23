@@ -6,11 +6,11 @@ from dataclasses import dataclass
 
 @dataclass
 class TransformerConfig:
-    block_size: int = 32
+    block_size: int = 256
     vocab_size: int = 128 #vocab size == 116, as per karpathy, choosing a vocab size closest to a multiple of 64 increases the speed of training 
     n_layer: int = 6
-    n_head: int = 4
-    n_embd: int = 32
+    n_head: int = 6
+    n_embd: int = 384
     dropout: float = 0.2
 
 class CasualSelfAttention (nn.Module):
@@ -81,7 +81,7 @@ class Transformer (nn.Module):
         super().__init__()
         self.config=config
         self.toks_embd = nn.Embedding(config.vocab_size, config.n_embd)
-        self.pos_embd = nn.Embedding(config.vocab_size, config.n_embd)
+        self.pos_embd = nn.Embedding(config.block_size, config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size)
         self.blocks = nn.Sequential(*[Block(config)for _ in range(config.n_layer)])
         self.ln_f = nn.LayerNorm(config.n_embd)
