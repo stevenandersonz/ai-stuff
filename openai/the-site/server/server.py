@@ -6,12 +6,19 @@ import json
 openai.api_key = os.getenv("OPENAPI_KEY") 
 
 def prompt(board, model='davinci',chat_history=[]):
+    '''
+    using gpt-3.5-turbo model costs $0.002/ 1k tokens.
+    prompt has ~400 tokens so 3 request = ~1200 toks cost ~$0.002 
+
+    using text-davinci-003 model costs $0.02/1k tokens.
+    prompt has ~400 tokens so 3 request = ~1200 toks cost ~$0.02
+    '''
     prompt = '''
     You are an intelligent agent that is an expert player of tic-tac-toe.
     Humans play X and You play O.
     The game is played on a grid that's 3 squares by 3 squares.
     Players take turns putting their marks in empty squares.
-    Never play on a space that has already been played on.
+    Never play on a space that has already been played on, only play empty spaces marked by "-".
     The first player to get 3 of her marks in a row (up, down, across, or diagonally) is the winner.
     If player X have 2 of her marks in a row (up, down, across, or diagonally) you must play the next cell so he doesn't win.
     If player X have 2 of her marks separated in an empty space (up, down, across, or diagonally) you must play the empty cell so he doesn't win.
