@@ -1,0 +1,8 @@
+
+{
+    "move":{
+        "row": 0,
+        "col": 2
+    },
+    "trashTalk": "I'm unbeatable!"
+}
