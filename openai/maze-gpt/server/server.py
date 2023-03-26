@@ -8,10 +8,7 @@ openai.api_key = os.getenv("OPENAPI_KEY")
 def prompt(board, model='gpt-3.5-turbo'):
     '''
     using gpt-3.5-turbo model costs $0.002/ 1k tokens.
-    prompt has ~400 tokens so 3 request = ~1200 toks cost ~$0.002 
-
     using text-davinci-003 model costs $0.02/1k tokens.
-    prompt has ~400 tokens so 3 request = ~1200 toks cost ~$0.02
     '''
     prompt = '''
     You are playing a game, the game consist of the following rules:
