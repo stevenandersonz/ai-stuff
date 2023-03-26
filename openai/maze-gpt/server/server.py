@@ -19,7 +19,8 @@ def prompt(board, model='gpt-3.5-turbo'):
     There is only one cell marked as X, this is the entry point where you start playing.
     There is only one cell marked as 0, this is the destination where you must end playing.
     cell marked as B are blocked spaces, you cannot under any circumstance move into a space that is blocked.
-    cell marked as - are empty spaces, where you can freely move. However, you can only move right and down.
+    cell marked as - are empty spaces, where you can freely move. However, you can move right, left, down, up, but only one at the time.
+    you cannot jump between cells, you must move one cell at the time.
     Your objective is to reach the destination cell in the least amount of moves possible.
 
     {} 
