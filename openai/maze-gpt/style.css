@@ -1,0 +1,37 @@
+:root {
+  --maze-rows: 4;
+  --maze-columns: 4;
+}
+#maze-container {
+  display: grid;
+  grid-template-columns: repeat(var(--maze-columns), 1fr);
+  grid-template-rows: repeat(var(--maze-rows), 1fr);
+  height: 500px;
+  width: 500px;
+  margin: 0 auto;
+  border: 1px solid black;
+}
+
+.cell {
+  background-color: white;
+  border: 1px solid black;
+}
+
+.entry {
+  background-color: green;
+}
+.path {
+  background-color: cornflowerblue;
+}
+
+.exit {
+  background-color: red;
+}
+.option-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+.option-container > * {
+  margin-left: 2rem;
+}
