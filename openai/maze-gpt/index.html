@@ -9,14 +9,22 @@
 
     <script src="app.js"></script>
     <div class="option-container">
-      <label for="rows-config">Number of Rows:</label>
+      <label for="rows-config"># of Rows:</label>
       <input type="number" id="rows-config" name="rows-config" value="4" />
 
-      <label for="cols-config">Number of Columns:</label>
+      <label for="cols-config"># of Columns:</label>
       <input type="number" id="cols-config" name="cols-config" value="4" />
+      <label for="cols-config">prob of obstacles:</label>
+      <input
+        type="number"
+        id="obstacle-config"
+        name="obstacle-config"
+        value="0"
+      />
       <button id="render-btn">Render</button>
     </div>
-
-    <button id="submit">Find Path</button>
+    <div class="option-container">
+      <button id="submit">Find Path</button>
+    </div>
   </body>
 </html>

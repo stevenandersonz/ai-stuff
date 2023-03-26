@@ -20,6 +20,9 @@
 .entry {
   background-color: green;
 }
+.wall {
+  background-color: black;
+}
 .path {
   background-color: cornflowerblue;
 }

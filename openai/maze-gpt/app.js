@@ -1,15 +1,18 @@
 (function (global) {
-  const Maze = function (rows = 4, cols = 4) {
+  const Maze = function (rows = 4, cols = 4, obstacles = 0) {
     this.rows = rows;
     this.cols = cols;
+    this.obstacles = obstacles;
     this.grid = [];
   };
   Maze.prototype = {
     createGrid: function () {
-      console.log(this);
       for (let i = 0; i < this.rows; i++) {
         this.grid.push([]);
         for (let j = 0; j < this.cols; j++) {
+          if (Math.random() < this.obstacles) {
+            this.grid[i].push("B"); // Create empty spaces inside thegrid
+          }
           this.grid[i].push("-"); // Create empty spaces inside thegrid
         }
       }
@@ -40,6 +43,8 @@
             cell.classList.add("exit");
           } else if (this.grid[i][j] === "P") {
             cell.classList.add("path");
+          } else if (this.grid[i][j] === "B") {
+            cell.classList.add("wall");
           }
           mazeContainer.appendChild(cell);
         }
@@ -73,7 +78,10 @@ window.addEventListener("load", () => {
   renderBtn.addEventListener("click", () => {
     let rows = Number(document.getElementById("rows-config").value);
     let cols = Number(document.getElementById("cols-config").value);
-    maze = new Maze(rows, cols);
+    let obstaclesProb = Number(
+      document.getElementById("obstacle-config").value
+    );
+    maze = new Maze(rows, cols, obstaclesProb);
     maze.createGrid();
     maze.renderUI();
   });

@@ -15,9 +15,10 @@ def prompt(board, model='gpt-3.5-turbo'):
     '''
     prompt = '''
     You are playing a game, the game consist of the following rules:
-    You are in a {} grid, each cell can have 3 different states: 'X', 'O', or '-' 
+    You are in a {} grid, each cell can have 4 different states: 'X', 'O', 'B' or '-' 
     There is only one cell marked as X, this is the entry point where you start playing.
     There is only one cell marked as 0, this is the destination where you must end playing.
+    cell marked as B are blocked spaces, you cannot under any circumstance move into a space that is blocked.
     cell marked as - are empty spaces, where you can freely move. However, you can only move right and down.
     Your objective is to reach the destination cell in the least amount of moves possible.
 
@@ -30,9 +31,9 @@ def prompt(board, model='gpt-3.5-turbo'):
     }}
 
     The only key in the object will be "path" which value is a list of tuple, each tuple represents a move, the first element of the tuple is the row and the second element is the column.
-    the path must not include the entry point, and must not include the destination point.
+    the path must not include the entry point X, and it must not include the destination point O.
     Avoid appending any extra key into the JSON object, otherwise the game will not work.
-    Do not under any circumtances reponse with anything else than the JSON object with the "path" key.
+    Do not under any circumstance reponse with anything else than the JSON object with the "path" key.
     Avoid replying with an explanation at all cost. 
     The grid is 0 indexed.
 
