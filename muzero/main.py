@@ -13,6 +13,10 @@ class WithSnapshot(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
     def get_snapshot(self):
+        if self.unwrapped.render_mode=="human":
+            self.unwrapped.surf = None
+            self.unwrapped.screen = None
+            self.unwrapped.clock = None
         return copy.deepcopy(self.env)
     def load_snapshot(self, snapshot):
         self.env = copy.deepcopy(snapshot)
@@ -21,34 +25,46 @@ class WithSnapshot(gym.Wrapper):
         observation, reward, terminated, truncated, info = env.step(action)
         next_snapshot = self.get_snapshot()
         return ActionResult(next_snapshot, observation, reward, terminated,truncated, info)
-
-def ucb_score(node, scale=10):
+def uct_score(node, C):
     if node.visits == 0 :
         return float('inf')
     exploitation_term = node.qvalue_sum / node.visits
     exploration_term = math.sqrt(math.log(node.parent.visits) / node.visits)
     return exploitation_term + C * exploration_term
 
+def ucb1_score(node, scale=10):
+    if node.visits == 0 :
+        return float('inf')
+    exploitation_term = node.qvalue_sum / node.visits
+    return exploitation_term + scale * math.sqrt(2 * math.log(node.parent.visits) / node.visits)
+
 class Node: 
 
-    def __init__(self, parent, action):
+    def __init__(self, parent, action, snapshot=None):
         self.action = action
         self.children = []
         self.parent = parent
         self.visits = 0
         self.qvalue_sum=0
+        self.terminated = False
+        self.snapshot = None
+        self.truncated = None
+        self.reward = 0
+        self.observation = None
         if parent:
-            res = env.get_result(parent.snapshot, action)
+            res = env.get_result(self.parent.snapshot, action)
             self.snapshot, self.observation, self.reward, self.terminated, self.truncated, _ = res
+        else:
+            env.load_snapshot(snapshot)
+            self.snapshot = snapshot
 
     def select(self):
-        scores = [ucb_score(child) for child in self.children] 
+        scores = [ucb1_score(child) for child in self.children] 
         best_score = max(scores)
         max_indices = [i for i in range(len(scores)) if scores[i] == best_score]
         return self.children[random.choice(max_indices)]
 
     def expand(self):
-        assert not self.terminated or not self.truncated, "Can't expand from terminal state"
         for action in range(env.action_space.n):
             self.children.append(Node(self, action))
 
@@ -59,13 +75,13 @@ class Node:
         if self.parent:
             self.parent.update(my_qvalue)
 
-    def rollout(self, t_max=10*2):
+    def rollout(self, t_max=100):
         rollout_reward =  0
         env.load_snapshot(self.snapshot)
         for _ in range(t_max) :
             observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
             rollout_reward += reward
-            if terminated or truncated:
+            if terminated:
                 return self.reward
         return rollout_reward
     def safe_delete(self):
@@ -75,7 +91,7 @@ class Node:
             child.safe_delete()
             del child
     
-def mcts(root, max_iter=1):
+def mcts(root, max_iter=1, t_roll=20):
     for _ in range(max_iter):
         node = root
         while node.children:
@@ -85,74 +101,56 @@ def mcts(root, max_iter=1):
         else:
             if not node.visits:
                 node.expand()
-            result = node.rollout() 
+            result = node.rollout(t_roll) 
             node.update(result)
 
     
-class Root(Node):
-    def __init__(self, snapshot, observation):
-        """
-        creates special node that acts like tree root
-        :snapshot: snapshot (from env.get_snapshot) to start planning from
-        :observation: last environment observation
-        """
-
-        self.parent = self.action = None
-        self.children = []  # set of child nodes
-
-        # root: load snapshot and observation
-        self.snapshot = snapshot
-        self.observation = observation
-        self.reward = 0
-        self.visits = 0 
-        self.terminated = False
-        self.qvalue_sum = 0
-
-    @staticmethod
-    def from_node(node):
-        """initializes node as root"""
-        root = Root(node.snapshot, node.observation)
-        # copy data
-        root.visits = node.visits
-        root.qvalue_sum = node.qvalue_sum
-        root.children = node.children
-        root.terminated = node.terminated
-        return root
-
 env = WithSnapshot(gym.make('CartPole-v1'))
 root_observation, _ = env.reset()
 s0 = env.get_snapshot()
-root = Root(s0,root_observation)
+root = Node(None,None, s0)
 total_rewards = 0
 
 def print_tree(node, depth=0):
     if node is None:
         return
     indent = ' ' * depth
-    print(f"{indent} v:{node.visits} w:{node.qvalue_sum} t:{node.terminated} a:{node.action} o:{node.observation}")
+    print(f"{indent} id:{str(hash(node))[-6:]} v:{node.visits} w:{node.qvalue_sum} t:{node.terminated} a:{node.action} o:{node.observation}")
     for child in node.children:
         print_tree(child, depth + 2)
 
-mcts(root, 2000)
-
+max_iter = 10000 
+mcts(root, max_iter)
 env.load_snapshot(s0)
+env.unwrapped.render_mode = "human"
+screen = None
+surf = None
 while True:
-    env.unwrapped.render_mode = 'human'
     best_node = max(root.children, key=lambda node: node.qvalue_sum)
     observation, reward, terminated, truncated, info = env.step(best_node.action)
     total_rewards += reward
-    if terminated or truncated:
+    if terminated:
         print(f"total rewards: {total_rewards}")
         break
-    for child in root.children:
-        if child != best_node:
-            child.safe_delete()
-     # declare best child a new root
-    root = Root.from_node(best_node)
-
-    # you may want to expand tree here
+    
+    #set the new root as best_node
+    #set parent == none so the reference goes away and gets garbage collected
+    #TODO: need to delete the all nodes of root except for best_node
+    root = best_node
+    root.parent = None
+    root.action = None
     if not root.children:
-        mcts(root, 2000)
-        env.load_snapshot(s0)
-    # <YOUR CODE>
+        # Since root has not children we can build the tree again with mcts
+        # get_snapshot() deep copy env but it can't copy pygame Objects
+        # thats why i saved these properties so I can load them after
+        screen = env.unwrapped.screen
+        surf = env.unwrapped.surf
+        clock = env.unwrapped.clock
+        snap = env.get_snapshot()
+        mcts(root, 100, t_roll=10)
+        print("rebuilding tree")
+        env.load_snapshot(snap)
+        env.unwrapped.screen = screen
+        env.unwrapped.surf = surf
+        env.unwrapped.clock = clock
 env.close()
