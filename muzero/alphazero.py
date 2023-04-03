@@ -144,7 +144,7 @@ root = Node(None, None, observation=root_observation, terminated=False, snapshot
 total_rewards = 0
 n_episodes = 100
 n_sim = 25
-n_iter = 100
+n_iter = 50
 eval_iter = 20
 v_resign = None
 temp = 1
