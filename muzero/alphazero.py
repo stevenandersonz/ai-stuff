@@ -71,6 +71,19 @@ class Node:
 # (p,v) = net(s)
 # p -> vector of move probabilities. Represents the prob of selecting each move a, p_a = Pr(a|s)
 # value v is a scalar evaluation, estimating the probability of current player winning from position s
+def softmax(x, temperature=1.0):
+    """Softmax function with a temperature feature that allows one to reshape the output probability distribution.
+    High temperature implies a distribution tending towards uniform distribution
+    Low temperature implies a distribution tending toward a one hot vector, or Dirac distribution
+    A temperature of 1.0 yields a classical softmax function
+    :param x: (ndarray of floats) input vector
+    :param temperature: (float) allows to smooth or sharpen
+    :return: (ndarray of floats) A probability distribution
+    """
+    if temperature < 0.1:
+        raise ValueError('Temperature parameter should not be less than 0.1')
+    t = 1/temperature
+    return (torch.exp(x)**t/torch.sum(torch.exp(x)**t, dim=-1, keepdim=True))
 
 class AlphaZeroNet(nn.Module):
     def __init__(self, n_obs, num_actions):
@@ -82,15 +95,14 @@ class AlphaZeroNet(nn.Module):
         self.value_head1 = nn.Linear(256, 64)
         self.value_head2 = nn.Linear(64, 1)
     def forward(self, x):
-        # Convolutional layers
         x = F.relu(self.linear1(x))
         x = F.relu(self.linear2(x))
         x = F.relu(self.linear3(x))
         # Policy head
-        p = F.softmax(self.policy_head(x.view(x.size(0), -1)), dim=1)
+        p = softmax(self.policy_head(x))
         # Value head
-        v = F.relu(self.value_head1(x.view(x.size(0), -1)))
-        v = torch.tanh(self.value_head2(v)).squeeze()
+        v = F.relu(self.value_head1(x))
+        v = self.value_head2(v)
         return p, v
         
 @torch.no_grad()
@@ -133,14 +145,15 @@ total_rewards = 0
 n_episodes = 100
 n_sim = 25
 n_iter = 100
+eval_iter = 20
 v_resign = None
 temp = 1
 epochs=10
 batch_size=4
 
-def run_episodes(test=False):
+def run_episodes(root):
     for _ in range(n_episodes):
-        mcts(n_sim)
+        mcts(root, n_sim)
         env.load_snapshot(s0)
         while True:
             action_prob = get_action_prob(temperature=1)
@@ -179,45 +192,58 @@ def run_test(root):
     return models 
 
 def loss_pi(targets, outputs):
-    return -torch.sum(targets * outputs) / targets.size()[0]
+    return  -torch.sum(targets * torch.log(outputs)) / targets.size()[0]
+
 
 def loss_v(targets, outputs):
     return torch.sum((targets - outputs.view(-1)) ** 2) / targets.size()[0]
 
-def get_batch(x):
-    sample_ids = np.random.randint(len(x), size=batch_size)
+def get_batch():
+    sample_ids = np.random.randint(len(plays), size=batch_size)
     obs, pis, vs = list(zip(*[plays[i] for i in sample_ids]))
     obs = torch.tensor(np.array(obs).astype(np.float32))
     target_pis = torch.tensor(np.array(pis).astype(np.float32))
     target_vs = torch.tensor(np.array(vs).astype(np.float32))
     return obs, target_pis, target_vs
     
+@torch.no_grad()
+def estimate_loss():
+    net.eval()
+    losses = torch.zeros(eval_iter)
+    for i in range(eval_iter):
+        x, target_pis, target_vs = get_batch()
+        pi, v = net(x)
+        l_pi = loss_pi(target_pis, pi)
+        l_vs = loss_v(target_vs, v)
+        total_loss = l_pi + l_vs 
+        losses[i] = total_loss.item()
+    net.train()
+    return losses.mean()
 
-# optimizer = optim.AdamW(net.parameters(), lr=0.001)
-# torch.save(net.state_dict(), "./temp/prev.pth")
-# losses = []
-# for iter in range(n_iter):
-#     # play
-#     run_episodes()
-#     # training
-#     for epoch in range(epochs):
-#         obs, target_pis, target_vs = get_batch(plays)
-#         out_pi, out_v = net(obs)
-#         l_pi = loss_pi(target_pis, out_pi)
-#         l_vs = loss_v(target_vs, out_v)
-#         total_loss = l_pi + l_vs
-#         losses.append(total_loss)
-#         total_loss.backward()
-#         optimizer.step()
-#         optimizer.zero_grad(set_to_none=True)
+optimizer = optim.AdamW(net.parameters(), lr=0.001)
+#torch.save(net.state_dict(), "./temp/prev.pth")
 
-#     if iter % 10 == 0:
-#         print(f"iter: {iter} loss: {sum(losses)/len(losses)}")
-#         losses = []
+for iter in range(n_iter):
+    # play
+    run_episodes(root)
+    # training
+    for epoch in range(epochs):
+        obs, target_pis, target_vs = get_batch()
+        out_pi, out_v = net(obs)
+        l_pi = loss_pi(target_pis, out_pi)
+        l_vs = loss_v(target_vs, out_v)
+        total_loss = l_pi + l_vs
+        total_loss.backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
 
-# torch.save(net.state_dict(), "./temp/new.pth")
-stats = run_test(root)
-print(f"rewards for prev model: {stats['prev']} - new model: {stats['new']}")
+    if iter % 10 == 0:
+        losses = estimate_loss()
+        print(f"iter: {iter} loss: {losses}")
+
+#torch.save(net.state_dict(), "./temp/new.pth")
+#stats = run_test(root)
+#print(f"rewards for prev model: {stats['prev']} - new model: {stats['new']}")
     
 
 env.close()
