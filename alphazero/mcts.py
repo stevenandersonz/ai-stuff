@@ -4,12 +4,18 @@ import torch
 
 C_PUCT = 1.4
 
-def puct(node):
-    '''
-    This search control strategy initially prefers actions with high prior probability 
-    and low visit count, but asympotically prefers actions with high action value
-    '''
-    return node.Q + C_PUCT * node.P * (math.sqrt(node.parent.N) / (1 + node.N))
+def puct(node, exploration_weight):
+    """
+    Calculates the PUCT score for a given node in the tree.
+    :param node: The node for which to calculate the PUCT score.
+    :param exploration_weight: A hyperparameter that controls the amount of exploration.
+    :return: The PUCT score for the node.
+    """
+    if node.N == 0:
+        return float("inf")
+    exploitation_term = node.Q / node.N
+    exploration_term = exploration_weight * math.sqrt(math.log(node.parent.N) / node.N)
+    return exploitation_term + exploration_term
 
 class Node:
     def __init__(self, parent, action, observation=None, terminated=False, snapshot=None):
@@ -30,7 +36,7 @@ class Node:
         self.Q = 0
         self.P = 0 
     def select(self):
-        scores = [puct(child) for child in self.children]
+        scores = [puct(child, C_PUCT) for child in self.children]
         best_score = max(scores)
         best_idxs = [idx for idx in range(len(scores)) if scores[idx] == best_score]
         return self.children[random.choice(best_idxs)] 

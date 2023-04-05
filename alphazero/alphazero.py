@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import gymnasium as gym
@@ -27,7 +25,7 @@ class WithSnapshot(gym.Wrapper):
         next_snapshot = self.get_snapshot()
         return ActionResult(next_snapshot, observation, terminated)
 
-def get_action_prob (temperature=1):
+def get_action_prob (root, temperature=1):
     action_visits = [child.N for child in root.children]
     action_prob = torch.zeros((2,))
     if temperature == 0:
@@ -43,11 +41,8 @@ def get_action_prob (temperature=1):
 
 plays = []
 env = WithSnapshot(gym.make('CartPole-v1'))
-initial_state, _ = env.reset()
 n_actions = env.action_space.n
-m = AlphaZeroNet(len(initial_state), num_actions=n_actions)
-s0 = env.get_snapshot()
-root = Node(None, None, observation=initial_state, terminated=False, snapshot=s0)
+m = AlphaZeroNet(4, num_actions=n_actions)
 total_rewards = 0
 n_episodes = 100
 n_sim = 25
@@ -58,12 +53,15 @@ temp = 1
 epochs=10
 batch_size=4
 
-def run_episodes(root):
+def run_episodes():
     for _ in range(n_episodes):
+        initial_state, _ = env.reset()
+        s0 = env.get_snapshot()
+        root = Node(None, None, observation=initial_state, terminated=False, snapshot=s0)
         mcts(root, m,env, n_sim)
         env.load_snapshot(s0)
         while True:
-            action_prob = get_action_prob(temperature=1)
+            action_prob = get_action_prob(root, temperature=1)
             action = np.random.choice(len(action_prob), p=action_prob)
             observation, reward, terminated, truncated, info = env.step(action)
             if terminated:
@@ -78,17 +76,18 @@ def print_tree(node, depth=0):
     for child in node.children:
         print_tree(child, depth + 2)
 
-def run_test(root,model):
+def run_test(model):
     rewards = 0
-    env.load_snapshot(s0)
+    initial_state, _ = env.reset()
+    s0 = env.get_snapshot()
+    root = Node(None, None, observation=initial_state, terminated=False, snapshot=s0)
     m.load_state_dict(torch.load(f"./temp/{model}.pth"))
     mcts(root,m, env,10)
     #print_tree(root)
     env.load_snapshot(s0)
     while True:
-        action_prob, node = get_action_prob(temperature=0)
-        action = np.random.choice(len(action_prob), p=action_prob)
-        observation, reward, terminated, truncated, info = env.step(action)
+        action_prob, node = get_action_prob(root, temperature=0)
+        observation, reward, terminated, truncated, info = env.step(node.action)
         if terminated or truncated:
             break
         rewards += reward
@@ -135,7 +134,7 @@ torch.save(m.state_dict(), "./temp/prev.pth")
 
 for iter in range(n_iter):
     # play
-    run_episodes(root)
+    run_episodes()
     # training
     for epoch in range(epochs):
         obs, target_pis, target_vs = get_batch()
@@ -152,7 +151,7 @@ for iter in range(n_iter):
         print(f"iter: {iter} loss: {losses}")
 
 torch.save(m.state_dict(), "./temp/new.pth")
-#run_test(root,"new")
+run_test("new")
     
 
 env.close()
