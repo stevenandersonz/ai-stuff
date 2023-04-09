@@ -1,5 +1,6 @@
 import math
 import random
+import numpy as np
 import torch
 
 C_PUCT = 1.4
@@ -16,6 +17,23 @@ def puct(node, exploration_weight):
     exploitation_term = node.Q / node.N
     exploration_term = exploration_weight * math.sqrt(math.log(node.parent.N) / node.N)
     return exploitation_term + exploration_term
+
+class ReplayBuffer:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.buffer = []
+        self.position = 0
+
+    def add(self, state, action, outcome):
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(None)
+        self.buffer[self.position] = (state, action, outcome)
+        self.position = (self.position + 1) % self.capacity
+
+    def sample(self, batch_size):
+        batch = random.sample(self.buffer, batch_size)
+        states, actions, outcomes = zip(*batch)
+        return np.array(states), np.array(actions), np.array(outcomes)
 
 class Node:
     def __init__(self, parent, action, observation=None, terminated=False, snapshot=None):
@@ -59,7 +77,7 @@ class Node:
 
         
 @torch.no_grad()
-def mcts(root, m, env, n_simulations):
+def mcts(root, m, env, n_simulations, device="cuda"):
     m.eval()
     for _ in range(n_simulations):
         node = root
@@ -70,6 +88,7 @@ def mcts(root, m, env, n_simulations):
         else:
             if not node.N:
                 node.expand(env)
-            p,v = m(torch.tensor(node.observation).view(-1, len(node.observation)))
+            x = torch.tensor(node.observation).view(-1, len(node.observation)).to(device)
+            p,v = m(x)
             node.update(v.view(-1)[0])
     m.train()
