@@ -60,7 +60,7 @@ class Node:
             self.snapshot = snapshot
 
     def select(self):
-        scores = [uct_score(child, C) for child in self.children] 
+        scores = [ucb1_score(child, C) for child in self.children] 
         best_score = max(scores)
         max_indices = [i for i in range(len(scores)) if scores[i] == best_score]
         return self.children[random.choice(max_indices)]
