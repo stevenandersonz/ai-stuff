@@ -71,14 +71,15 @@ def estimate_loss(m):
         pi, v = m(x)
         l_pi = loss_pi(target_pis, pi)
         l_vs = loss_v(target_vs, v)
-        total_loss = l_pi + l_vs 
+        regularization_loss = 0.1 * sum(torch.norm(p, 2) ** 2 for p in m.parameters())
+        total_loss = l_pi + l_vs + regularization_loss
         losses[i] = total_loss.item()
     avg_loss = losses.mean()
     m.train()
     return avg_loss 
 
 
-def run_episode(m, training=True):
+def run_episode(m, training=True, debug=False):
     rewards=0
     root = Node(None, None, observation=initial_state, terminated=False, snapshot=s0)
     # for each episode lets load the game at the initial state
@@ -92,6 +93,8 @@ def run_episode(m, training=True):
             state_before_search = env.get_snapshot()
             mcts(root, m,env, n_sim)
             env.load_snapshot(state_before_search)
+            if debug:
+                print_tree(root)
             
         action_prob = get_action_prob(root, temperature=1)
         action = np.random.choice(len(action_prob), p=action_prob)
@@ -102,13 +105,15 @@ def run_episode(m, training=True):
         if training:
             replay_buffer.add(observation, action_prob, reward)
     return rewards
+
 def train (m):
    for epoch in range(epochs):
         obs, target_pis, target_vs = get_batch(device)
         out_pi, out_v = m(obs)
         l_pi = loss_pi(target_pis, out_pi)
         l_vs = loss_v(target_vs, out_v)
-        total_loss = l_pi + l_vs
+        regularization_loss = 0.1 * sum(torch.norm(p, 2) ** 2 for p in m.parameters())
+        total_loss = l_pi + l_vs + regularization_loss
         total_loss.backward()
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
@@ -121,7 +126,7 @@ def pit (new_model, prev_model):
     rewards["new_model"] = run_episode(new_model, False)
 
     # Collects total rewards from both models, then computes how much better is the new model based on total rewards
-    print(f"new model: {rewards['new_model']} old model {rewards['prev_model']}")
+    #print(f"new model: {rewards['new_model']} old model {rewards['prev_model']}")
     diff =  rewards["new_model"] - rewards["prev_model"] 
     percent_better = (diff / rewards["prev_model"])    
     return percent_better
@@ -132,7 +137,7 @@ n_actions = env.action_space.n
 
 total_rewards = 0
 n_episodes = 100
-n_sim = 25
+n_sim = 5
 n_iter = 100
 eval_iter = 100
 temp = 1
@@ -144,6 +149,15 @@ m.to(device)
 optimizer = optim.AdamW(m.parameters(), lr=0.001)
 initial_state, _ = env.reset()
 s0 = env.get_snapshot()
+
+def print_tree(x, hist=[]):
+  if x.N != 0:
+    print("%4d %-16s %8.4f %4s" % (x.N, str(hist), x.Q, x.P))
+  for i,c in enumerate(x.children):
+    print_tree(c,hist+[i])
+
+#un_episode(m, False, True)
+
 for i in range(n_iter):
     for e in range(n_episodes):
         run_episode(m)
@@ -156,9 +170,9 @@ for i in range(n_iter):
     prev_m = m.load("prev_m")
     frac_win = pit(m, prev_m)
     if frac_win < 0.6:
-        print("keeping old model")
+        #print("keeping old model")
         m = prev_m
     else:
-        print("keeping new model")
+        print(f"iter {i} - updates model")
 
 env.close()

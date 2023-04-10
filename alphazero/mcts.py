@@ -14,9 +14,9 @@ def puct(node, exploration_weight):
     """
     if node.N == 0:
         return float("inf")
-    exploitation_term = node.Q / node.N
     exploration_term = exploration_weight * math.sqrt(math.log(node.parent.N) / node.N)
-    return exploitation_term + exploration_term
+    return  node.Q + exploration_term
+
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -52,8 +52,8 @@ class Node:
         self.N = 0
         self.W = 0
         self.Q = 0
-        self.P = 0 
-    def select(self):
+        self.P = []
+    def select(self, m):
         scores = [puct(child, C_PUCT) for child in self.children]
         best_score = max(scores)
         best_idxs = [idx for idx in range(len(scores)) if scores[idx] == best_score]
@@ -82,13 +82,23 @@ def mcts(root, m, env, n_simulations, device="cuda"):
     for _ in range(n_simulations):
         node = root
         while node.children:
-            node = node.select()
+            node = node.select(m)
         if node.terminated:
             node.update(0)
         else:
             if not node.N:
                 node.expand(env)
-            x = torch.tensor(node.observation).view(-1, len(node.observation)).to(device)
-            p,v = m(x)
-            node.update(v.view(-1)[0])
+            rewards = 0
+            env.load_snapshot(node.snapshot)
+            for _ in range(20): 
+                x = torch.tensor(node.observation).view(-1, len(node.observation)).to(device)
+                policy, _= m(x)
+                action = torch.argmax(policy).item()
+                obs, reward, terminated, truncated, info = env.step(action)
+                if terminated or truncated:
+                    rewards=reward
+                    break
+                rewards +=reward
+            env.load_snapshot(node.snapshot)
+            node.update(rewards)
     m.train()

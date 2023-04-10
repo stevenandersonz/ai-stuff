@@ -52,6 +52,7 @@ class Node:
         self.reward = 0
         self.observation = None
         if parent:
+            assert not self.parent.terminated, "calling step on terminated node"
             res = env.get_result(self.parent.snapshot, action)
             self.snapshot, self.observation, self.reward, self.terminated, self.truncated, _ = res
         else:
@@ -59,7 +60,7 @@ class Node:
             self.snapshot = snapshot
 
     def select(self):
-        scores = [ucb1_score(child) for child in self.children] 
+        scores = [uct_score(child, C) for child in self.children] 
         best_score = max(scores)
         max_indices = [i for i in range(len(scores)) if scores[i] == best_score]
         return self.children[random.choice(max_indices)]
@@ -75,7 +76,9 @@ class Node:
         if self.parent:
             self.parent.update(my_qvalue)
 
-    def rollout(self, t_max=100):
+    def rollout(self, t_max=20):
+        if self.terminated:
+            return 0
         rollout_reward =  0
         env.load_snapshot(self.snapshot)
         for _ in range(t_max) :
@@ -91,18 +94,15 @@ class Node:
             child.safe_delete()
             del child
     
-def mcts(root, max_iter=1, t_roll=20):
+def mcts(root, max_iter=1):
     for _ in range(max_iter):
         node = root
         while node.children:
             node = node.select()
-        if node.terminated:
-            node.update(0)
-        else:
-            if not node.visits:
-                node.expand()
-            result = node.rollout(t_roll) 
-            node.update(result)
+        if node.visits > 0 and not node.terminated:
+            node.expand()
+            node = node.children[0] if not node.children[0].terminated else node.children[1]
+        node.update(node.rollout())
 
     
 env = WithSnapshot(gym.make('CartPole-v1'))
@@ -147,10 +147,10 @@ while True:
         surf = env.unwrapped.surf
         clock = env.unwrapped.clock
         snap = env.get_snapshot()
-        mcts(root, 100, t_roll=10)
-        print("rebuilding tree")
+        mcts(root, 100)
         env.load_snapshot(snap)
         env.unwrapped.screen = screen
         env.unwrapped.surf = surf
         env.unwrapped.clock = clock
+
 env.close()

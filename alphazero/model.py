@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 def softmax_with_temperature(x, temperature=1.0):
     """Softmax function with a temperature feature that allows one to reshape the output probability distribution.
     High temperature implies a distribution tending towards uniform distribution
