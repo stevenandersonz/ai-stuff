@@ -9,7 +9,7 @@ from copy import deepcopy
 from random import shuffle
 
 ActionResult = namedtuple(
-    "action_result", ("snapshot", "observation", "reward", "terminated"))
+    "action_result", ("snapshot", "observation", "terminated", "truncated"))
 
 class WithSnapshot(gym.Wrapper):
     '''Wraps the env and allows copying its state, so it can be simulated and explore at each timestep'''
@@ -23,13 +23,13 @@ class WithSnapshot(gym.Wrapper):
         self.load_snapshot(snapshot)
         observation, reward, terminated, truncated, info = env.step(action)
         next_snapshot = self.get_snapshot()
-        return ActionResult(next_snapshot, observation, reward, terminated)
+        return ActionResult(next_snapshot, observation, terminated, truncated)
 
 n_iters = 100
-epochs = 5
+epochs = 10
 n_episode = 20
 n_sim = 100
-batch_size = 128
+batch_size = 64
 env = WithSnapshot(gym.make('CartPole-v1'))
 initial_obs, _ = env.reset()
 initial_env = env.get_snapshot()
@@ -42,15 +42,16 @@ m = AlphaZeroNet(state_size, n_actions)
 m.to("cuda")
 
 class Node():
-    def __init__(self, prior, state=None, reward=0, terminated=False, parent=None, snapshot=None):
+    def __init__(self, prior, state=None, terminated=False, truncated=False, parent=None, snapshot=None, action=0):
         self.visit_count = 0
         self.prior = prior
         self.value_sum = 0
         self.children = {}
+        self.truncated= truncated
         self.parent = parent
         self.state = state
         self.terminated = terminated
-        self.reward = reward
+        self.action=action
         self.snapshot = snapshot
 
     def expanded(self):
@@ -85,7 +86,7 @@ def ucb_score(child):
     prior_score = child.prior * math.sqrt(child.parent.visit_count) / (child.visit_count + 1)
     if child.visit_count > 0:
         # The value of the child is from the perspective of the opposing player
-        value_score = -child.value()
+        value_score = child.value()
     else:
         value_score = 0
 
@@ -93,7 +94,7 @@ def ucb_score(child):
 def select_child (node):
     while  node.expanded():
        node = max(node.children.values(), key=ucb_score)
-    return node
+    return node 
 
 def print_tree(x, hist=[]):
     print("%4d %-16s %8.4f %4s %s" % (x.visit_count, str(hist), x.value_sum, x.prior, x.terminated))
@@ -102,8 +103,8 @@ def print_tree(x, hist=[]):
 
 def expand(node, action_prob):
     for a, prob in enumerate(action_prob):
-        snap, o, reward, terminated= env.get_result(node.snapshot, a)
-        new_node = Node(prob, o, reward, terminated, node, snap)
+        snapshot, o,terminated, truncated = env.get_result(node.snapshot, a)
+        new_node = Node(prob, o, terminated, truncated, node, snapshot, a)
         node.children[a] = new_node
 
 def backpropagate(node, value):
@@ -112,7 +113,7 @@ def backpropagate(node, value):
     if node.parent:
         backpropagate(node.parent, node.value_sum)
 
-def mcts(n_sim):
+def mcts():
     root = Node(0, None)
     root.state = env.state
     root.snapshot = env.get_snapshot()
@@ -121,22 +122,24 @@ def mcts(n_sim):
     expand(root, action_prob)
     for _ in range(n_sim):
         node = select_child(root)
-        if not node.terminated:
+        if not node.terminated and not node.truncated:
             x = torch.tensor(node.state, dtype=torch.float32).unsqueeze(0).to("cuda")
             action_prob, value = m.predict(x)
             expand(node, action_prob)
             backpropagate(node, value)
-        else:
+        else: 
             backpropagate(node, 0)
+    env.load_snapshot(root.snapshot)
     return root
 
 
 def run_episode():
     train_examples = []
     terminated = False
-    while not terminated: 
-        root = mcts(n_sim)
-        env.load_snapshot(root.snapshot)
+    truncated = False
+    env.reset()
+    while not terminated and not truncated: 
+        root = mcts()
         action_prob = [0 for _ in range(n_actions)]
         for a, c in root.children.items():
             action_prob[a] = c.visit_count 
@@ -148,7 +151,6 @@ def run_episode():
     return train_examples
 
 def learn():
-    save_every = 2
     m.save('cartpolev1-prev')
     print("rewards before training %d" % run_model())
     for i in range(1, n_iters + 1):
@@ -207,9 +209,7 @@ def train(examples):
 
             batch_idx += 1
 
-        print()
-        print("policy loss", np.mean(pi_losses))
-        print("value loss", np.mean(v_losses))
+        print(f"pi loss {np.mean(pi_losses)} - v loss {np.mean(v_losses)}")
 
 
 def loss_pi(targets, outputs):
@@ -225,7 +225,7 @@ def run_model():
     terminated = False
     total_reward = 0
     while not terminated: 
-        root = mcts(n_sim)
+        root = mcts()
         env.load_snapshot(root.snapshot)
         action_prob = [0 for _ in range(n_actions)]
         for a, c in root.children.items():
@@ -250,5 +250,24 @@ def pit ():
     percent_better = (diff / rewards["prev_model"])    
     print(f"before {rewards['prev_model']} - new {rewards['new_model']}  new is %{percent_better*100:.2f}")
     return percent_better
-learn()
+
+#learn()
+m.load('cartpolev1-prev')
+print(run_model())
+
+# import time
+
+# # start_time = time.time()
+# # root = mcts()
+# # end_time = time.time()
+# # total_time = end_time - start_time
+# # print("Total execution time: ", total_time, "seconds")
+
+# start_time = time.time()
+# for _ in range(100):
+#     run_episode()
+# end_time = time.time()
+# total_time = end_time - start_time
+# print("Total execution time: ", total_time, "seconds")
+
 

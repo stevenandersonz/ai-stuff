@@ -44,11 +44,9 @@ class AlphaZeroNet(nn.Module):
         self.eval()
         with torch.no_grad():
             pi, v = self.forward(x)
-        return pi.data.cpu().numpy()[0], v.data.cpu().numpy()[0]
+        return pi.cpu().numpy()[0], v.cpu().item()
     def save(self, name):
         torch.save(self.state_dict(), f"./temp/{name}.pth")
     def load(self, name):
-        m = AlphaZeroNet(4, 2)
-        m.load_state_dict(torch.load(f"./temp/{name}.pth"))
-        m.to("cuda")
-        return m
+        self.load_state_dict(torch.load(f"./temp/{name}.pth"))
+        self.to("cuda")
