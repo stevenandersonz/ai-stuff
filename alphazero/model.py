@@ -40,6 +40,11 @@ class AlphaZeroNet(nn.Module):
         v = F.relu(self.value_head1(x))
         v = self.value_head2(v)
         return p, v
+    def predict(self, x):
+        self.eval()
+        with torch.no_grad():
+            pi, v = self.forward(x)
+        return pi.data.cpu().numpy()[0], v.data.cpu().numpy()[0]
     def save(self, name):
         torch.save(self.state_dict(), f"./temp/{name}.pth")
     def load(self, name):

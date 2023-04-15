@@ -1,4 +1,8 @@
 {
   "vim.vimrc.enable": true,
-  "vim.vimrc.path": "//wsl.localhost/Ubuntu/home/niguiri/.vim"
+  "vim.vimrc.path": "//wsl$/Ubuntu/home/niguiri/.vim/.vimrc",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.autopep8"
+  },
+  "python.formatting.provider": "none"
 }
