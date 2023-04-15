@@ -6,6 +6,7 @@ import torch.optim as optim
 import math
 from model import AlphaZeroNet 
 from copy import deepcopy
+from random import shuffle
 
 ActionResult = namedtuple(
     "action_result", ("snapshot", "observation", "reward", "terminated"))
@@ -24,6 +25,11 @@ class WithSnapshot(gym.Wrapper):
         next_snapshot = self.get_snapshot()
         return ActionResult(next_snapshot, observation, reward, terminated)
 
+n_iters = 100
+epochs = 5
+n_episode = 20
+n_sim = 100
+batch_size = 128
 env = WithSnapshot(gym.make('CartPole-v1'))
 initial_obs, _ = env.reset()
 initial_env = env.get_snapshot()
@@ -33,6 +39,7 @@ state_size = env.observation_space.shape[0]
 print(f"# actions: {n_actions} - state size {state_size}")
 
 m = AlphaZeroNet(state_size, n_actions)
+m.to("cuda")
 
 class Node():
     def __init__(self, prior, state=None, reward=0, terminated=False, parent=None, snapshot=None):
@@ -109,13 +116,13 @@ def mcts(n_sim):
     root = Node(0, None)
     root.state = env.state
     root.snapshot = env.get_snapshot()
-    x = torch.tensor(root.state, dtype=torch.float32).unsqueeze(0)
+    x = torch.tensor(root.state, dtype=torch.float32).unsqueeze(0).to("cuda")
     action_prob, _ = m.predict(x)
     expand(root, action_prob)
     for _ in range(n_sim):
         node = select_child(root)
         if not node.terminated:
-            x = torch.tensor(node.state, dtype=torch.float32).unsqueeze(0)
+            x = torch.tensor(node.state, dtype=torch.float32).unsqueeze(0).to("cuda")
             action_prob, value = m.predict(x)
             expand(node, action_prob)
             backpropagate(node, value)
@@ -123,5 +130,125 @@ def mcts(n_sim):
             backpropagate(node, 0)
     return root
 
-root = mcts(5)
-print_tree(root)
+
+def run_episode():
+    train_examples = []
+    terminated = False
+    while not terminated: 
+        root = mcts(n_sim)
+        env.load_snapshot(root.snapshot)
+        action_prob = [0 for _ in range(n_actions)]
+        for a, c in root.children.items():
+            action_prob[a] = c.visit_count 
+        action_prob = action_prob / np.sum(action_prob)
+        action = root.select_action(temperature=0)
+        obs, reward, terminated, truncated, _ = env.step(action)
+        train_examples.append((root.state, action_prob, reward))
+
+    return train_examples
+
+def learn():
+    save_every = 2
+    m.save('cartpolev1-prev')
+    print("rewards before training %d" % run_model())
+    for i in range(1, n_iters + 1):
+
+        print("{}/{}".format(i, n_iters))
+
+        train_examples = []
+
+        for eps in range(n_episode):
+            obs ,_ = env.reset()
+            iteration_train_examples = run_episode()
+            train_examples.extend(iteration_train_examples)
+
+        shuffle(train_examples)
+        train(train_examples)
+        percent_better = pit()
+        if percent_better > 0.55:
+            print("updating model...")
+            m.save('cartpolev1-prev')
+
+
+def train(examples):
+    optimizer = optim.Adam(m.parameters(), lr=5e-4)
+    pi_losses = []
+    v_losses = []
+
+    for epoch in range(epochs):
+        m.train()
+
+        batch_idx = 0
+
+        while batch_idx < int(len(examples) / batch_size):
+            sample_ids = np.random.randint(len(examples), size=batch_size)
+            boards, pis, vs = list(zip(*[examples[i] for i in sample_ids]))
+            boards = torch.tensor(np.array(boards).astype(np.float32))
+            target_pis = torch.tensor(np.array(pis))
+            target_vs = torch.tensor(np.array(vs).astype(np.float32))
+
+            # predict
+            boards = boards.contiguous().cuda()
+            target_pis = target_pis.contiguous().cuda()
+            target_vs = target_vs.contiguous().cuda()
+
+            # compute output
+            out_pi, out_v = m(boards)
+            l_pi = loss_pi(target_pis, out_pi)
+            l_v = loss_v(target_vs, out_v)
+            total_loss = l_pi + l_v
+
+            pi_losses.append(float(l_pi))
+            v_losses.append(float(l_v))
+
+            optimizer.zero_grad()
+            total_loss.backward()
+            optimizer.step()
+
+            batch_idx += 1
+
+        print()
+        print("policy loss", np.mean(pi_losses))
+        print("value loss", np.mean(v_losses))
+
+
+def loss_pi(targets, outputs):
+    loss = -(targets * torch.log(outputs)).sum(dim=1)
+    return loss.mean()
+
+def loss_v( targets, outputs):
+    loss = torch.sum((targets-outputs.view(-1))**2)/targets.size()[0]
+    return loss
+
+def run_model():
+    initial_state, _ = env.reset()
+    terminated = False
+    total_reward = 0
+    while not terminated: 
+        root = mcts(n_sim)
+        env.load_snapshot(root.snapshot)
+        action_prob = [0 for _ in range(n_actions)]
+        for a, c in root.children.items():
+            action_prob[a] = c.visit_count 
+        action_prob = action_prob / np.sum(action_prob)
+        action = root.select_action(temperature=0)
+        obs, reward, terminated, truncated, _ = env.step(action)
+        total_reward += reward
+    return total_reward
+
+def pit ():
+    rewards = {}
+    m.save("cartpolev1-new")
+    m.load("cartpolev1-prev")
+    rewards["prev_model"] = run_model()
+    m.load("cartpolev1-new")
+    rewards["new_model"] = run_model()
+
+    # Collects total rewards from both models, then computes how much better is the new model based on total rewards
+    #print(f"new model: {rewards['new_model']} old model {rewards['prev_model']}")
+    diff =  rewards["new_model"] - rewards["prev_model"] 
+    percent_better = (diff / rewards["prev_model"])    
+    print(f"before {rewards['prev_model']} - new {rewards['new_model']}  new is %{percent_better*100:.2f}")
+    return percent_better
+learn()
+
