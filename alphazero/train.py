@@ -16,6 +16,10 @@ class WithSnapshot(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
     def get_snapshot(self):
+        if self.unwrapped.render_mode=="human":
+            self.unwrapped.surf = None
+            self.unwrapped.screen = None
+            self.unwrapped.clock = None
         return deepcopy(self.env)
     def load_snapshot(self, snapshot):
         self.env = deepcopy(snapshot)
@@ -28,6 +32,7 @@ class WithSnapshot(gym.Wrapper):
 n_iters = 100
 epochs = 20
 n_episode = 50
+max_reward = 600 # stop simulation after it reach a max rewards
 n_sim = 100
 n_games = 5
 batch_size = 64
@@ -138,7 +143,8 @@ def run_episode():
     train_examples = []
     terminated = False
     truncated = False
-    while not terminated and not truncated: 
+    rewards = 0
+    while rewards < max_reward and not terminated and not truncated: 
         root = mcts()
         action_prob = [0 for _ in range(n_actions)]
         for a, c in root.children.items():
@@ -147,6 +153,7 @@ def run_episode():
         action = root.select_action(temperature=0)
         obs, reward, terminated, truncated, _ = env.step(action)
         train_examples.append((root.state, action_prob, reward))
+        rewards += reward
 
     return train_examples
 
@@ -220,19 +227,34 @@ def loss_v( targets, outputs):
     loss = torch.sum((targets-outputs.view(-1))**2)/targets.size()[0]
     return loss
 
-def run_model():
+def run_model(render=None):
     initial_state, _ = env.reset()
-    terminated = False
     total_reward = 0
-    while not terminated: 
-        root = mcts()
-        action_prob = [0 for _ in range(n_actions)]
-        for a, c in root.children.items():
-            action_prob[a] = c.visit_count 
-        action_prob = action_prob / np.sum(action_prob)
+    screen = None
+    surf = None
+    clock = None
+#    env.unwrapped.render_mode = "human"
+    root = mcts()
+    while True: 
         action = root.select_action(temperature=0)
         obs, reward, terminated, truncated, _ = env.step(action)
+        if terminated or truncated:
+            break
         total_reward += reward
+        root = root.children[action]
+        root.parent = None
+        if not root.expanded():
+        #     # Since root has not children we can build the tree again with mcts
+        #     # get_snapshot() deep copy env but it can't copy pygame Objects
+        #     # thats why i saved these properties so I can load them after
+        #     screen = env.unwrapped.screen
+        #     surf = env.unwrapped.surf
+        #     clock = env.unwrapped.clock
+            print('rebuild')
+            root = mcts()
+        #     env.unwrapped.screen = screen
+        #     env.unwrapped.surf = surf
+        #     env.unwrapped.clock = clock
     return total_reward
 
 def pit ():
@@ -261,8 +283,8 @@ def pit ():
 
 #learn()
 m.load('latest')
-print(run_model())
-
+print(run_model(render='human'))
+env.close()
 # import time
 
 # # start_time = time.time()
