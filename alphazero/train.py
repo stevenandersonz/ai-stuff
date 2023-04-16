@@ -26,9 +26,10 @@ class WithSnapshot(gym.Wrapper):
         return ActionResult(next_snapshot, observation, terminated, truncated)
 
 n_iters = 100
-epochs = 10
-n_episode = 20
+epochs = 20
+n_episode = 50
 n_sim = 100
+n_games = 5
 batch_size = 64
 env = WithSnapshot(gym.make('CartPole-v1'))
 initial_obs, _ = env.reset()
@@ -137,7 +138,6 @@ def run_episode():
     train_examples = []
     terminated = False
     truncated = False
-    env.reset()
     while not terminated and not truncated: 
         root = mcts()
         action_prob = [0 for _ in range(n_actions)]
@@ -151,7 +151,7 @@ def run_episode():
     return train_examples
 
 def learn():
-    m.save('cartpolev1-prev')
+    m.save('latest')
     print("rewards before training %d" % run_model())
     for i in range(1, n_iters + 1):
 
@@ -167,9 +167,9 @@ def learn():
         shuffle(train_examples)
         train(train_examples)
         percent_better = pit()
-        if percent_better > 0.55:
-            print("updating model...")
-            m.save('cartpolev1-prev')
+        if percent_better > 0.3:
+            print("saving model...")
+            m.save('latest')
 
 
 def train(examples):
@@ -226,7 +226,6 @@ def run_model():
     total_reward = 0
     while not terminated: 
         root = mcts()
-        env.load_snapshot(root.snapshot)
         action_prob = [0 for _ in range(n_actions)]
         for a, c in root.children.items():
             action_prob[a] = c.visit_count 
@@ -237,22 +236,31 @@ def run_model():
     return total_reward
 
 def pit ():
-    rewards = {}
-    m.save("cartpolev1-new")
-    m.load("cartpolev1-prev")
-    rewards["prev_model"] = run_model()
-    m.load("cartpolev1-new")
-    rewards["new_model"] = run_model()
+    '''
+    average the reward over n_games of the lastest saved model and the running model 
+    '''
+    rewards = { "latest": [], "new":[]}
+    m.save("new")
+    m.load("latest")
+    for _ in range(n_games):
+        rewards["latest"] += [run_model()]
+    m.load("new")
+    for _ in range(n_games):
+        rewards["new"] += [run_model()]
+    
+    avg_reward_latest = sum(rewards["latest"]) / n_games
+    avg_reward_new = sum(rewards["new"]) / n_games
 
     # Collects total rewards from both models, then computes how much better is the new model based on total rewards
     #print(f"new model: {rewards['new_model']} old model {rewards['prev_model']}")
-    diff =  rewards["new_model"] - rewards["prev_model"] 
-    percent_better = (diff / rewards["prev_model"])    
-    print(f"before {rewards['prev_model']} - new {rewards['new_model']}  new is %{percent_better*100:.2f}")
+    diff =  avg_reward_new - avg_reward_latest 
+    percent_better = (diff / avg_reward_latest)    
+    print(f"latest {rewards['latest']} - avg: {avg_reward_latest} ")
+    print(f"new {rewards['new']} - avg: {avg_reward_new} ")
     return percent_better
 
 #learn()
-m.load('cartpolev1-prev')
+m.load('latest')
 print(run_model())
 
 # import time
@@ -265,7 +273,8 @@ print(run_model())
 
 # start_time = time.time()
 # for _ in range(100):
-#     run_episode()
+#plays = run_episode()
+#print(len(plays))
 # end_time = time.time()
 # total_time = end_time - start_time
 # print("Total execution time: ", total_time, "seconds")
